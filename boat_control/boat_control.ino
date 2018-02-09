@@ -61,46 +61,35 @@ void loop()
   rudder_raw = pulseIn(RUDDER_PIN, HIGH);
   throttle_raw = pulseIn(THROTTLE_PIN, HIGH);
 
+  // Occasionally we get glitches when we are at the limits of the physical control
+  rudder_raw = constrain(rudder_raw, RUDDER_MIN, RUDDER_MAX);
+  throttle_raw = constrain(throttle_raw, THROTTLE_MIN, THROTTLE_MAX);
+
+  // Map the raw PWM values to the range [-255, 255]
   rudder_scaled = map(rudder_raw, RUDDER_MIN, RUDDER_MAX, 255, -255);
   throttle_scaled = map(throttle_raw, THROTTLE_MIN, THROTTLE_MAX, -255, 255);
-//  rudder_offset = rudder_raw - RUDDER_MID;
-//  throttle_offset = throttle_raw - THROTTLE_MID;
 
-//  rudder_scaled = (rudder_offset * 255) / RUDDER_RANGE;
-//  throttle_scaled = (throttle_offset * 255) / THROTTLE_RANGE;
-
-  response_mag = 255.0 / (double)((RUDDER_RANGE * RUDDER_RANGE) + (THROTTLE_RANGE * THROTTLE_RANGE));
-
+  // Evenly mix the throttle and rudder response
   left_mix = rudder_scaled + throttle_scaled;
   right_mix = -rudder_scaled + throttle_scaled;
 
-//  if ((left_mix > 255) || (right_mix > 255))
-//  {
-//    left_mix = (int)(left_mix * response_mag);
-//    right_mix = (int)(right_mix * response_mag);
-//  }
-
-  if (left_mix > 255)
+  // If the combined response is greater than the maximum allowable, rescale to the
+  // maximum value. Scale both throttle and rudder so they are proportionally reduced
+  if ((left_mix > 255) ||
+    (right_mix > 255) ||
+    (left_mix < -255) ||
+    (right_mix < -255))
   {
-    left_mix = 255;
-  }
-  else if (left_mix < -255)
-  {
-    left_mix = -255;
+    response_mag = 255.0 / (double)((rudder_scaled * rudder_scaled) + (throttle_scaled * throttle_scaled));
+    left_mix = (int)((double)left_mix * response_mag);
+    right_mix = (int)((double)right_mix * response_mag);
   }
 
-  if (right_mix > 255)
-  {
-    right_mix = 255;
-  }
-  else if (right_mix < -255)
-  {
-    right_mix = -255;
-  }
-
+  // Set the new speed
   left_motor->setSpeed(abs(left_mix));
   right_motor->setSpeed(abs(right_mix));
 
+  // Set the motor directions
   if (left_mix >= 0)
   {
     left_motor->run(FORWARD);
